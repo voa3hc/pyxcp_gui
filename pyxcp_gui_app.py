@@ -228,12 +228,15 @@ class MainWindow(QMainWindow):
             self.worker.start()
             for widget in self.mMeasureTableWidgets:
                 widget.start()
-
+            for w in self.mOslScopeWidgets:
+                w.start()
     def stop_acquisition(self):
         if self.worker.isRunning():
             self.worker.stop()
             for widget in self.mMeasureTableWidgets:
                 widget.stop()
+            for w in self.mOslScopeWidgets:
+                w.stop()
 
     
     def refresh_all_widgets(self):

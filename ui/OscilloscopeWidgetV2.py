@@ -377,7 +377,7 @@ class OscilloscopeWidgetV2(WidgetBase):
     RENDER_INTERVAL_MS = 33         # redraw rate (~30 FPS)
     TABLE_INTERVAL_MS = 100         # table refresh rate (10 FPS)
     WINDOW_SECONDS = 10.0
-    MAX_POINTS = 5000
+    MAX_POINTS = 999999
 
     def __init__(self, data_manager, parent=None):
         super().__init__(data_manager, parent)
@@ -401,30 +401,17 @@ class OscilloscopeWidgetV2(WidgetBase):
         #self.resize(1280, 720)
 
         self.current_time = 0.0
-        self.running = True
-        self.dt = self.SAMPLE_INTERVAL_MS / 1000.0
+        self.isScopeRunning = False
 
         self.signal_defs = []
         self.signal_row_map: Dict[str, int] = {}
         
-        self._setup_signals()
+        self._setup_sample_signals()
         
-        self._setup_timers() # THV NEW
         self._states = {}  # name -> SignalState
 
-
-    def _refresh_plot(self):
-        updates = self.data_manager.consume_plot_updates()
-        for name, (x, y) in updates.items():
-            state = self._states.get(name)
-            if state is None:
-                continue
-            state.curve.setData(x, y)
-
-    def update_value(self, name: str, t: float, value: float):
-        # Optional: not needed if using timer-pull design
-        pass
-
+        # subscribe to data
+        self.data_manager.data_arrived.connect( self._on_data_arrived)
 
     # --------------------------------------------------------
     # UI
@@ -487,18 +474,16 @@ class OscilloscopeWidgetV2(WidgetBase):
     # --------------------------------------------------------
     # Signal setup
     # --------------------------------------------------------
-    def _setup_signals(self):
+    def _setup_sample_signals(self):
         # Replace these demo functions with real signal sources later
         self.signal_defs = [
             {
                 "name": "TestVar1_u8",
-                "color": "#ffffff",
-                "func": lambda t: ((t % 3.0) / 3.0) * 400.0 - 200.0,
+                "color": "#ffffff"
             },
             {
                 "name": "TestVar2_u8",
                 "color": "#00d0ff",
-                "func": lambda t: math.sin(t * 2.2) * 80.0,
             }
         ]
 
@@ -537,36 +522,31 @@ class OscilloscopeWidgetV2(WidgetBase):
         self.signal_row_map[name] = row
 
     # --------------------------------------------------------
-    # Timers
-    # --------------------------------------------------------
-    def _setup_timers(self):
-        self.sample_timer = QTimer(self)
-        self.sample_timer.timeout.connect(self.ingest_samples)
-        self.sample_timer.start(self.SAMPLE_INTERVAL_MS)
-
-        self.render_timer = QTimer(self)
-        self.render_timer.timeout.connect(self.render_scope)
-        self.render_timer.start(self.RENDER_INTERVAL_MS)
-
-        self.table_timer = QTimer(self)
-        self.table_timer.timeout.connect(self.refresh_table_values)
-        self.table_timer.start(self.TABLE_INTERVAL_MS)
-
-    # --------------------------------------------------------
     # Real-time pipeline
     # --------------------------------------------------------
+    def _on_data_arrived(self):
+        self.ingest_samples()
+        
+    def refresh_widgets(self):
+        self.refresh_table_values()
+        self.render_scope()
+
     def ingest_samples(self):
-        if not self.running:
+        if not self.isScopeRunning:
             return
+        
+        updates = self.data_manager.get_signal_data()
+        for name, sv in updates.items():
+            state = self.plot.signals.get(name)
+            if state is None:
+                continue
+            # sv.timestamp
+            self.current_time = sv.timestamp
+            self.plot.append_sample(name, self.current_time, sv.value)
 
-        self.current_time += self.dt
-
-        for sig in self.signal_defs:
-            value = sig["func"](self.current_time)
-            self.plot.append_sample(sig["name"], self.current_time, value)
 
     def render_scope(self):
-        if not self.running:
+        if not self.isScopeRunning:
             return
 
         self.plot.redraw_dirty_curves()
@@ -576,11 +556,12 @@ class OscilloscopeWidgetV2(WidgetBase):
         self.plot.set_x_window(xmin, xmax)
 
     def refresh_table_values(self):
-        if not self.running:
+        if not self.isScopeRunning:
             return
 
-        for sig in self.signal_defs:
-            name = sig["name"]
+        updates = self.data_manager.get_signal_data()
+
+        for name, sv in updates.items():
             state = self.plot.signals.get(name)
             if state is None:
                 continue
@@ -591,19 +572,28 @@ class OscilloscopeWidgetV2(WidgetBase):
 
             item = self.table.item(row, 2)
             if item is not None:
-                item.setText(f"{state.buffer.last_value():.3f}")
+                item.setText(f"{sv.value:.3f}")
+
+   
 
     # --------------------------------------------------------
     # Controls
     # --------------------------------------------------------
+    def start(self):
+        self.start_stream()
+    
+
+    def stop(self):
+        self.pause_stream()
+
     def start_stream(self):
-        self.running = True
+        self.isScopeRunning = True
 
     def pause_stream(self):
-        self.running = False
+        self.isScopeRunning = False
 
     def reset_stream(self):
-        self.running = False
+        self.isScopeRunning = False
         self.current_time = 0.0
 
         self.plot.clear_all_data()
@@ -614,7 +604,7 @@ class OscilloscopeWidgetV2(WidgetBase):
                 value_item.setText("0.000")
 
         self.plot.set_x_window(0.0, self.WINDOW_SECONDS)
-        self.running = True
+        self.isScopeRunning = True
 
     # --------------------------------------------------------
     # Table interaction
