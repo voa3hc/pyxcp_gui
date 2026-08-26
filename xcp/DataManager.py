@@ -37,13 +37,13 @@ class DataManager(QObject):
         with self._lock:
             self._ensure_signal(name)
 
-    def acquireSignal(self, name: str, owner) -> None:
+    def acquire_signal(self, name: str, owner) -> None:
         """Register a signal and retain one reference for ``owner``."""
         with self._lock:
             self._ensure_signal(name)
             self._signal_references.setdefault(name, set()).add(id(owner))
 
-    def releaseSignal(self, name: str, owner) -> None:
+    def release_signal(self, name: str, owner) -> None:
         """Release one owner's reference and remove unreferenced signals."""
         with self._lock:
             owners = self._signal_references.get(name)
@@ -71,7 +71,7 @@ class DataManager(QObject):
     # -----------------------------
     # Worker ingestion
     # Called by XcpWorker: timestamp  - name - value
-    def ingestSignal(self, signal: Tuple[float, str, float]) -> None:
+    def ingest_signal(self, signal: Tuple[float, str, float]) -> None:
         changed = False
         with self._lock:
             time, name, value = signal
@@ -85,6 +85,6 @@ class DataManager(QObject):
     # -----------------------------
     # Widget pull APIs
     # -----------------------------
-    def getSignalData(self) -> Dict[str, ScalarValue]:
+    def get_signal_data(self) -> Dict[str, ScalarValue]:
         with self._lock:
             return self._signals

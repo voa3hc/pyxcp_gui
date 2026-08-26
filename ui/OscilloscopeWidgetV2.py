@@ -127,7 +127,7 @@ class MultiSignalPlot(pg.PlotWidget):
 
         if self._main_vb is not None:
             self._main_vb.setMouseEnabled(x=True, y=False)
-            self._main_vb.sigResized.connect(self._updateViewboxes)
+            self._main_vb.sigResized.connect(self._update_viewboxes)
 
         self.signals: Dict[str, SignalState] = {}
         self.selected_name: Optional[str] = None
@@ -135,7 +135,7 @@ class MultiSignalPlot(pg.PlotWidget):
     # --------------------------------------------------------
     # Safe base ViewBox access
     # --------------------------------------------------------
-    def _baseViewbox(self):
+    def _base_viewbox(self):
         vb = getattr(self, "_main_vb", None)
         if vb is not None:
             return vb
@@ -146,8 +146,8 @@ class MultiSignalPlot(pg.PlotWidget):
 
         return None
 
-    def _updateViewboxes(self):
-        base_vb = self._baseViewbox()
+    def _update_viewboxes(self):
+        base_vb = self._base_viewbox()
         if base_vb is None:
             return
 
@@ -159,16 +159,16 @@ class MultiSignalPlot(pg.PlotWidget):
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
-        self._updateViewboxes()
+        self._update_viewboxes()
 
     # --------------------------------------------------------
     # Signal management
     # --------------------------------------------------------
-    def addSignal(self, name: str, color: str, max_points: int = 5000):
+    def add_signal(self, name: str, color: str, max_points: int = 5000):
         if name in self.signals:
             return
 
-        base_vb = self._baseViewbox()
+        base_vb = self._base_viewbox()
         if base_vb is None:
             return
 
@@ -194,7 +194,7 @@ class MultiSignalPlot(pg.PlotWidget):
         )
         self.signals[name] = sig
 
-        self._updateViewboxes()
+        self._update_viewboxes()
 
         if self.selected_name is None:
             self.select_signal(name)
@@ -252,7 +252,7 @@ class MultiSignalPlot(pg.PlotWidget):
             sig.vb.setYRange(-1.0, 1.0, padding=0)
             sig.dirty = False
 
-    def setSignalVisible(self, name: str, visible: bool):
+    def set_signal_visible(self, name: str, visible: bool):
         sig = self.signals.get(name)
         if sig is None:
             return
@@ -261,7 +261,7 @@ class MultiSignalPlot(pg.PlotWidget):
         sig.curve.setVisible(visible)
 
     def set_x_window(self, xmin: float, xmax: float):
-        base_vb = self._baseViewbox()
+        base_vb = self._base_viewbox()
         if base_vb is None:
             return
         base_vb.setXRange(xmin, xmax, padding=0)
@@ -303,7 +303,7 @@ class MultiSignalPlot(pg.PlotWidget):
     # --------------------------------------------------------
     # Selected signal Y controls
     # --------------------------------------------------------
-    def scaleSelected_y(self, factor: float):
+    def scale_selected_y(self, factor: float):
         if self.selected_name is None:
             return
 
@@ -316,7 +316,7 @@ class MultiSignalPlot(pg.PlotWidget):
 
         sig.vb.setYRange(center - half_span, center + half_span, padding=0)
 
-    def panSelected_y(self, dy_ratio: float = 0.10):
+    def pan_selected_y(self, dy_ratio: float = 0.10):
         if self.selected_name is None:
             return
 
@@ -327,7 +327,7 @@ class MultiSignalPlot(pg.PlotWidget):
         delta = span * dy_ratio
         sig.vb.setYRange(ymin + delta, ymax + delta, padding=0)
 
-    def autoFitSelected_y(self):
+    def auto_fit_selected_y(self):
         if self.selected_name is None:
             return
 
@@ -357,9 +357,9 @@ class MultiSignalPlot(pg.PlotWidget):
         # Shift + wheel => pan selected signal on Y
         if modifiers & Qt.KeyboardModifier.ShiftModifier:
             if delta > 0:
-                self.panSelected_y(-self.PAN_STEP_RATIO)
+                self.pan_selected_y(-self.PAN_STEP_RATIO)
             else:
-                self.panSelected_y(+self.PAN_STEP_RATIO)
+                self.pan_selected_y(+self.PAN_STEP_RATIO)
             ev.accept()
             return
 
@@ -372,9 +372,9 @@ class MultiSignalPlot(pg.PlotWidget):
             zoom_out = self.ZOOM_OUT_FACTOR
 
         if delta > 0:
-            self.scaleSelected_y(zoom_in)
+            self.scale_selected_y(zoom_in)
         else:
-            self.scaleSelected_y(zoom_out)
+            self.scale_selected_y(zoom_out)
 
         ev.accept()
 
@@ -397,18 +397,18 @@ class OscilloscopeWidgetV2(WidgetBase):
     def __init__(self, data_manager, parent=None):
         super().__init__(data_manager, parent)
         self.plot = MultiSignalPlot()
-        self._setupToolbar()
+        self._setup_toolbar()
 
         # ==================================================
         # CENTRAL AREA (PLOT + TABLE)
         # ==================================================
-        self._centerLayout = QHBoxLayout()
-        self._setupUi()
+        self._center_layout = QHBoxLayout()
+        self._setup_ui()
         self.plot.set_x_window(0.0, self.WINDOW_SECONDS)
-        self._mainWidgetLayout.addLayout(self._centerLayout)
+        self._main_layout.addLayout(self._center_layout)
 
         self.current_time = 0.0
-        self.isScopeRunning = False
+        self.is_scope_running = False
 
         self.signal_defs = []
         self.signal_row_map: Dict[str, int] = {}
@@ -416,30 +416,30 @@ class OscilloscopeWidgetV2(WidgetBase):
     # --------------------------------------------------------
     # UI
     # --------------------------------------------------------
-    def _setupUi(self):
+    def _setup_ui(self):
  
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        self._mainWidgetLayout.removeWidget(self._tableWidget)
+        self._main_layout.removeWidget(self._table_widget)
         # Insert a new column at the beginning
-        self._tableWidget.insertColumn(0)
+        self._table_widget.insertColumn(0)
         # Set header
-        self._tableWidget.setHorizontalHeaderItem(0, QTableWidgetItem("Vis") )
-        self._tableWidget.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self._tableWidget.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self._tableWidget.itemChanged.connect(self._onTableItemChanged)
-        self._tableWidget.selectionModel().selectionChanged.connect(self._onSelectionChanged)
+        self._table_widget.setHorizontalHeaderItem(0, QTableWidgetItem("Vis"))
+        self._table_widget.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._table_widget.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._table_widget.itemChanged.connect(self._on_table_item_changed)
+        self._table_widget.selectionModel().selectionChanged.connect(self._on_selection_changed)
 
         splitter.addWidget(self.plot)
-        splitter.addWidget(self._tableWidget)
+        splitter.addWidget(self._table_widget)
         splitter.setSizes([980, 300])
 
-        self._centerLayout.addWidget(splitter)
+        self._center_layout.addWidget(splitter)
         self.setWindowTitle("Oscilloscope")
 
-    def _setupToolbar(self):
+    def _setup_toolbar(self):
         tb = QToolBar("Scope Toolbar")
         #self.addToolBar(tb)
-        self._mainWidgetLayout.addWidget(tb)
+        self._main_layout.addWidget(tb)
 
         act_run = tb.addAction("Run")
         act_pause = tb.addAction("Pause")
@@ -452,19 +452,19 @@ class OscilloscopeWidgetV2(WidgetBase):
         act_pan_down = tb.addAction("↓Y")
         act_fit = tb.addAction("Fit Y")
 
-        act_run.triggered.connect(self.startAcquisition)
-        act_pause.triggered.connect(self.stopAcquisition)
-        act_reset.triggered.connect(self.resetAcquisition)
+        act_run.triggered.connect(self.start_acquisition)
+        act_pause.triggered.connect(self.stop_acquisition)
+        act_reset.triggered.connect(self.reset_acquisition)
 
-        act_zoom_in.triggered.connect(lambda: self.plot.scaleSelected_y(0.85))
-        act_zoom_out.triggered.connect(lambda: self.plot.scaleSelected_y(1.15))
-        act_pan_up.triggered.connect(lambda: self.plot.panSelected_y(-0.08))
-        act_pan_down.triggered.connect(lambda: self.plot.panSelected_y(+0.08))
-        act_fit.triggered.connect(self.plot.autoFitSelected_y)
+        act_zoom_in.triggered.connect(lambda: self.plot.scale_selected_y(0.85))
+        act_zoom_out.triggered.connect(lambda: self.plot.scale_selected_y(1.15))
+        act_pan_up.triggered.connect(lambda: self.plot.pan_selected_y(-0.08))
+        act_pan_down.triggered.connect(lambda: self.plot.pan_selected_y(+0.08))
+        act_fit.triggered.connect(self.plot.auto_fit_selected_y)
 
-    def _addSignalRow(self, name: str, value: float):
-        row = self._tableWidget.rowCount()
-        self._tableWidget.insertRow(row)
+    def _add_signal_row(self, name: str, value: float):
+        row = self._table_widget.rowCount()
+        self._table_widget.insertRow(row)
 
         vis_item = QTableWidgetItem("")
         vis_item.setCheckState(Qt.CheckState.Checked)
@@ -477,9 +477,9 @@ class OscilloscopeWidgetV2(WidgetBase):
         name_item = QTableWidgetItem(name)
         value_item = QTableWidgetItem(f"{value:.3f}")
 
-        self._tableWidget.setItem(row, 0, vis_item)
-        self._tableWidget.setItem(row, 1, name_item)
-        self._tableWidget.setItem(row, 2, value_item)
+        self._table_widget.setItem(row, 0, vis_item)
+        self._table_widget.setItem(row, 1, name_item)
+        self._table_widget.setItem(row, 2, value_item)
 
         self.signal_row_map[name] = row
 
@@ -503,35 +503,35 @@ class OscilloscopeWidgetV2(WidgetBase):
         if not color.isValid():
             return
 
-        self.acquireSignal(name)
+        self.acquire_signal(name)
         self.signal_defs.append({"name": name, "color": color.name()})
-        self.plot.addSignal(name, color.name(), max_points=self.MAX_POINTS)
-        self._tableWidget.blockSignals(True)
-        self._addSignalRow(name, 0.0)
-        self._tableWidget.blockSignals(False)
+        self.plot.add_signal(name, color.name(), max_points=self.MAX_POINTS)
+        self._table_widget.blockSignals(True)
+        self._add_signal_row(name, 0.0)
+        self._table_widget.blockSignals(False)
 
     def remove_selected_item(self):
-        row = self._tableWidget.currentRow()
+        row = self._table_widget.currentRow()
         if row < 0:
             return
 
-        name_item = self._tableWidget.item(row, self._signal_name_column())
+        name_item = self._table_widget.item(row, self._signal_name_column())
         if name_item is None:
             return
 
         name = name_item.text()
-        self._tableWidget.removeRow(row)
+        self._table_widget.removeRow(row)
         self.signal_row_map = {
-            self._tableWidget.item(index, self._signal_name_column()).text(): index
-            for index in range(self._tableWidget.rowCount())
-            if self._tableWidget.item(index, self._signal_name_column()) is not None
+            self._table_widget.item(index, self._signal_name_column()).text(): index
+            for index in range(self._table_widget.rowCount())
+            if self._table_widget.item(index, self._signal_name_column()) is not None
         }
         self.signal_defs = [signal for signal in self.signal_defs if signal["name"] != name]
         self.plot.remove_signal(name)
-        self.releaseSignal(name)
+        self.release_signal(name)
 
-    def exportState(self):
-        state = super().exportState()
+    def export_state(self):
+        state = super().export_state()
         state["signals"] = [
             {
                 "name": signal["name"],
@@ -543,20 +543,20 @@ class OscilloscopeWidgetV2(WidgetBase):
         ]
         return state
 
-    def importState(self, state):
+    def import_state(self, state):
         if not isinstance(state, dict):
             return
 
-        super().importState(state)
+        super().import_state(state)
 
         for name in tuple(self.plot.signals):
             self.plot.remove_signal(name)
-        for name in tuple(self._ownedSignals):
-            self.releaseSignal(name)
+        for name in tuple(self._owned_signals):
+            self.release_signal(name)
 
         self.signal_defs = []
         self.signal_row_map.clear()
-        self._tableWidget.setRowCount(0)
+        self._table_widget.setRowCount(0)
 
         for signal in state.get("signals", []):
             if not isinstance(signal, dict):
@@ -566,14 +566,14 @@ class OscilloscopeWidgetV2(WidgetBase):
             if not name or name in self.plot.signals:
                 continue
 
-            self.acquireSignal(name)
+            self.acquire_signal(name)
             self.signal_defs.append({"name": name, "color": color})
-            self.plot.addSignal(name, color, max_points=self.MAX_POINTS)
-            self._addSignalRow(name, 0.0)
+            self.plot.add_signal(name, color, max_points=self.MAX_POINTS)
+            self._add_signal_row(name, 0.0)
             visible = bool(signal.get("visible", True))
-            self.plot.setSignalVisible(name, visible)
-            visibility_item = self._tableWidget.item(
-                self._tableWidget.rowCount() - 1,
+            self.plot.set_signal_visible(name, visible)
+            visibility_item = self._table_widget.item(
+                self._table_widget.rowCount() - 1,
                 0,
             )
             if visibility_item is not None:
@@ -581,9 +581,9 @@ class OscilloscopeWidgetV2(WidgetBase):
                     Qt.CheckState.Checked if visible else Qt.CheckState.Unchecked
                 )
 
-        if self._tableWidget.rowCount() > 0:
-            self._tableWidget.selectRow(0)
-            self.plot.select_signal(self._tableWidget.item(0, 1).text())
+        if self._table_widget.rowCount() > 0:
+            self._table_widget.selectRow(0)
+            self.plot.select_signal(self._table_widget.item(0, 1).text())
 
     # --------------------------------------------------------
     # Real-time pipeline
@@ -591,7 +591,7 @@ class OscilloscopeWidgetV2(WidgetBase):
     @pyqtSlot(tuple)
     def on_xcp_data(self, sample):
         """Receive one worker sample on the GUI thread."""
-        if not self.isScopeRunning:
+        if not self.is_scope_running:
             return
 
         timestamp, name, value = sample
@@ -605,18 +605,18 @@ class OscilloscopeWidgetV2(WidgetBase):
 
         row = self.signal_row_map.get(name)
         if row is not None:
-            item = self._tableWidget.item(row, 2)
+            item = self._table_widget.item(row, 2)
             if item is not None:
                 item.setText(f"{float(value):.3f}")
 
-    def refreshData(self):
-        if not self.isScopeRunning:
+    def refresh_data(self):
+        if not self.is_scope_running:
             return
-        self.renderScope()
+        self.render_scope()
 
 
-    def renderScope(self):
-        if not self.isScopeRunning:
+    def render_scope(self):
+        if not self.is_scope_running:
             return
 
         self.plot.redraw_dirty_curves()
@@ -628,49 +628,49 @@ class OscilloscopeWidgetV2(WidgetBase):
     # --------------------------------------------------------
     # Controls
     # --------------------------------------------------------
-    def startAcquisition(self):
-        self.resetAcquisition()
-        self.isScopeRunning = True
+    def start_acquisition(self):
+        self.reset_acquisition()
+        self.is_scope_running = True
     
-    def stopAcquisition(self):
-        self.isScopeRunning = False
+    def stop_acquisition(self):
+        self.is_scope_running = False
 
-    def resetAcquisition(self):
-        self.isScopeRunning = False
+    def reset_acquisition(self):
+        self.is_scope_running = False
         self.current_time = 0.0
 
         self.plot.clear_all_data()
 
-        for row in range(self._tableWidget.rowCount()):
-            value_item = self._tableWidget.item(row, 2)
+        for row in range(self._table_widget.rowCount()):
+            value_item = self._table_widget.item(row, 2)
             if value_item is not None:
                 value_item.setText("0.000")
 
         self.plot.set_x_window(0.0, self.WINDOW_SECONDS)
-        self.isScopeRunning = True
+        self.is_scope_running = True
 
     # --------------------------------------------------------
     # Table interaction
     # --------------------------------------------------------
-    def _onTableItemChanged(self, item):
+    def _on_table_item_changed(self, item):
         if item.column() != 0:
             return
 
         row = item.row()
-        name_item = self._tableWidget.item(row, 1)
+        name_item = self._table_widget.item(row, 1)
         if name_item is None:
             return
 
         name = name_item.text()
         visible = item.checkState() == Qt.CheckState.Checked
-        self.plot.setSignalVisible(name, visible)
+        self.plot.set_signal_visible(name, visible)
 
-    def _onSelectionChanged(self):
-        row = self._tableWidget.currentRow()
+    def _on_selection_changed(self):
+        row = self._table_widget.currentRow()
         if row < 0:
             return
 
-        name_item = self._tableWidget.item(row, 1)
+        name_item = self._table_widget.item(row, 1)
         if name_item is None:
             return
 

@@ -1,24 +1,3 @@
-import sys
-import time
-import math
-import random
-import collections
-
-from PyQt6.QtCore import QThread, pyqtSignal, Qt
-from PyQt6.QtWidgets import (
-    QApplication,
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
-    QMdiArea,
-    QMdiSubWindow,
-    QWidgetAction,
-    QTableWidget,QTableWidgetItem, QAbstractItemView,
-    QTableWidgetItem, QHeaderView, QToolBar, QLabel, QHBoxLayout
-)
-from PyQt6.QtGui import QColor, QBrush
-import pyqtgraph as pg
-
 from ui.MeasureTableWidget import MeasureTableWidget
 
 class ScalarTableWidget(MeasureTableWidget):
@@ -28,10 +7,10 @@ class ScalarTableWidget(MeasureTableWidget):
         # optional
         self.setWindowTitle("Scalar Table")
         # populate
-        self._populateExampleData()
+        self._populate_example_data()
 
     # --------------------------------------------------
-    def _populateExampleData(self):
+    def _populate_example_data(self):
         signals = [
             ("InjHyd_swtRefEveEOE_C", "0.00", "[-]"),
             ("InjHyd_swtEnaRef_C", "9.00", "[-]"),
@@ -41,6 +20,6 @@ class ScalarTableWidget(MeasureTableWidget):
         ]
 
         for name, value, unit in signals:
-            self._addRow(name, value, unit)
+            self._add_row(name, value, unit)
 
     

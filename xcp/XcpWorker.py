@@ -65,7 +65,7 @@ class XcpWorker(QThread):
         super().__init__(parent)
         self._running = False
     
-    def onSample(self, timestamp: float, name: str, value: float):
+    def on_sample(self, timestamp: float, name: str, value: float):
         if self._running:
             self.signal_ready.emit((timestamp, name, value))
 
@@ -73,7 +73,7 @@ class XcpWorker(QThread):
         if not self._running:
             self._running = True
             
-            policy = UpdateDataToDataManager(DAQ_LISTS, self.onSample)
+            policy = UpdateDataToDataManager(DAQ_LISTS, self.on_sample)
             
             ap = ArgumentParser()
             # Establish session framework and stream data continuously

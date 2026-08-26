@@ -30,23 +30,23 @@ class MeasureTableWidget(WidgetBase):
         ]
 
         for name, value, unit in signals:
-            self._addRow(name, value, unit)
+            self._add_row(name, value, unit)
 
     # --------------------------------------------------
-    def exportState(self):
+    def export_state(self):
         data = []
-        for row in range(self._tableWidget.rowCount()):
-            name = self._tableWidget.item(row, 0).text()
-            value = self._tableWidget.item(row, 1).text()
-            unit = self._tableWidget.item(row, 2).text()
+        for row in range(self._table_widget.rowCount()):
+            name = self._table_widget.item(row, 0).text()
+            value = self._table_widget.item(row, 1).text()
+            unit = self._table_widget.item(row, 2).text()
             data.append((name, value, unit))
 
         column_widths = [
-            self._tableWidget.columnWidth(col)
-            for col in range(self._tableWidget.columnCount())
+            self._table_widget.columnWidth(col)
+            for col in range(self._table_widget.columnCount())
         ]
 
-        state = super().exportState()
+        state = super().export_state()
         state.update({
             "data": data,
             "column_widths": column_widths,
@@ -54,20 +54,20 @@ class MeasureTableWidget(WidgetBase):
         return state
 
 
-    def importState(self, state):
+    def import_state(self, state):
         if not isinstance(state, dict):
             return
 
-        super().importState(state)
-        for name in tuple(self._ownedSignals):
-            self.releaseSignal(name)
-        self._tableWidget.setRowCount(0)
-        self._valueItems.clear()
+        super().import_state(state)
+        for name in tuple(self._owned_signals):
+            self.release_signal(name)
+        self._table_widget.setRowCount(0)
+        self._value_items.clear()
         for name, value, unit in state.get("data", []):
-            self._addRow(name, value, unit)
+            self._add_row(name, value, unit)
 
         # restore column widths
         widths = state.get("column_widths", [])
         for col, w in enumerate(widths):
-            if col < self._tableWidget.columnCount():
-                self._tableWidget.setColumnWidth(col, w)
+            if col < self._table_widget.columnCount():
+                self._table_widget.setColumnWidth(col, w)

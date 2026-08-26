@@ -1,204 +1,173 @@
 from collections.abc import Mapping
+
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QInputDialog,
     QMenu,
-    QWidget,
-    QVBoxLayout,
+    QMdiSubWindow,
     QTableWidget,
     QTableWidgetItem,
-    QAbstractItemView,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtCore import pyqtSignal, Qt
-from PyQt6.QtWidgets import QMdiSubWindow
+
 
 class WidgetBase(QMdiSubWindow):
-    
-    closed = pyqtSignal(object)   # emit self
+    closed = pyqtSignal(object)
 
     def __init__(self, data_manager, parent):
         super().__init__(parent)
-        # Inner widget (actual UI)
-        self._centralWidget = QWidget()
-        self.setWidget(self._centralWidget)
-        
-        self._mainWidgetLayout = QVBoxLayout(self._centralWidget)
-
-        self._createTable()
-
-        self._dataManager = data_manager
-        self._valueItems = {}
-        self._ownedSignals = set()
-        
-        #Allow closing
+        self._central_widget = QWidget()
+        self.setWidget(self._central_widget)
+        self._main_layout = QVBoxLayout(self._central_widget)
+        self._create_table()
+        self._data_manager = data_manager
+        self._value_items = {}
+        self._owned_signals = set()
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        self._valueItems = {}
 
-    def _createTable(self):
-        
-        self._tableWidget = QTableWidget(0, 3)
-        self._tableWidget.setHorizontalHeaderLabels(["Name", "Value", "Unit"])
-        self._tableWidget.verticalHeader().setVisible(False)
-        self._tableWidget.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        self._tableWidget.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self._tableWidget.setAlternatingRowColors(True)
-        self._tableWidget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self._tableWidget.customContextMenuRequested.connect(self._show_context_menu)
-        self._tableWidget.setColumnWidth(0, 260)
-        self._tableWidget.setColumnWidth(1, 100)
-        self._tableWidget.setColumnWidth(2, 70)
-        self._mainWidgetLayout.addWidget(self._tableWidget)
-    # --------------------------------------------------
-    def _addRow(self, name, value, unit):
+    def _create_table(self):
+        self._table_widget = QTableWidget(0, 3)
+        self._table_widget.setHorizontalHeaderLabels(["Name", "Value", "Unit"])
+        self._table_widget.verticalHeader().setVisible(False)
+        self._table_widget.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._table_widget.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._table_widget.setAlternatingRowColors(True)
+        self._table_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table_widget.customContextMenuRequested.connect(self._show_context_menu)
+        self._table_widget.setColumnWidth(0, 260)
+        self._table_widget.setColumnWidth(1, 100)
+        self._table_widget.setColumnWidth(2, 70)
+        self._main_layout.addWidget(self._table_widget)
+
+    def _add_row(self, name, value, unit):
         name = str(name).strip()
         if not name:
             return
 
-        row = self._tableWidget.rowCount()
-        self._tableWidget.insertRow(row)
-
+        row = self._table_widget.rowCount()
+        self._table_widget.insertRow(row)
         name_item = QTableWidgetItem(name)
         value_item = QTableWidgetItem(str(value))
         unit_item = QTableWidgetItem(unit)
-
         name_item.setFlags(Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled)
         value_item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         unit_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._table_widget.setItem(row, 0, name_item)
+        self._table_widget.setItem(row, 1, value_item)
+        self._table_widget.setItem(row, 2, unit_item)
+        self._value_items[name] = value_item
+        self.acquire_signal(name)
 
-        self._tableWidget.setItem(row, 0, name_item)
-        self._tableWidget.setItem(row, 1, value_item)
-        self._tableWidget.setItem(row, 2, unit_item)
-
-        self._valueItems[name] = value_item
-        self.acquireSignal(name)
-
-    ##########################################
-    # contex menu
     def _show_context_menu(self, position):
-        item = self._tableWidget.itemAt(position)
+        item = self._table_widget.itemAt(position)
         if item is not None:
-            self._tableWidget.selectRow(item.row())
+            self._table_widget.selectRow(item.row())
 
-        menu = QMenu(self._tableWidget)
+        menu = QMenu(self._table_widget)
         add_action = menu.addAction("Add item")
         remove_action = menu.addAction("Remove item")
         menu.addSeparator()
-
         width_menu = menu.addMenu("Auto set column width")
         auto_all_action = width_menu.addAction("All columns")
         column_actions = {
-            self._tableWidget.horizontalHeaderItem(column).text(): width_menu.addAction(
-                self._tableWidget.horizontalHeaderItem(column).text()
+            self._table_widget.horizontalHeaderItem(column).text(): width_menu.addAction(
+                self._table_widget.horizontalHeaderItem(column).text()
             )
-            for column in range(self._tableWidget.columnCount())
-            if self._tableWidget.horizontalHeaderItem(column) is not None
+            for column in range(self._table_widget.columnCount())
+            if self._table_widget.horizontalHeaderItem(column) is not None
         }
 
-        action = menu.exec(self._tableWidget.viewport().mapToGlobal(position))
+        action = menu.exec(self._table_widget.viewport().mapToGlobal(position))
         if action == add_action:
-            self.addItem()
+            self.add_item()
         elif action == remove_action:
-            self.removeSelectedItem()
+            self.remove_selected_item()
         elif action == auto_all_action:
-            self.autoSetColumnWidth()
+            self.auto_set_column_width()
         elif action in column_actions.values():
-            self.autoSetColumnWidth(action.text())
+            self.auto_set_column_width(action.text())
 
-    def _signalNameColumn(self):
-        """Column containing the signal name for the shared menu actions."""
+    def _signal_name_column(self):
         return 0
 
-    def addItem(self):
-        name, accepted = QInputDialog.getText(
-            self,
-            "Add measurement",
-            "Signal name:",
-        )
+    def _signal_value_column(self):
+        return 1
+
+    def add_item(self):
+        name, accepted = QInputDialog.getText(self, "Add measurement", "Signal name:")
         if not accepted or not name.strip():
             return
-
         name = name.strip()
-        if name in self._valueItems:
+        if name in self._value_items:
             return
-
         value, accepted = QInputDialog.getText(
-            self,
-            "Add measurement",
-            "Initial value:",
-            text="0",
+            self, "Add measurement", "Initial value:", text="0"
         )
         if not accepted:
             return
-
         unit, accepted = QInputDialog.getText(
-            self,
-            "Add measurement",
-            "Unit:",
-            text="[-]",
+            self, "Add measurement", "Unit:", text="[-]"
         )
         if accepted:
-            self._addRow(name, value, unit)
+            self._add_row(name, value, unit)
 
-    def removeSelectedItem(self):
+    def remove_selected_item(self):
         rows = sorted(
-            {index.row() for index in self._tableWidget.selectionModel().selectedRows()},
+            {index.row() for index in self._table_widget.selectionModel().selectedRows()},
             reverse=True,
         )
         for row in rows:
-            name_item = self._tableWidget.item(row, self._signalNameColumn())
+            name_item = self._table_widget.item(row, self._signal_name_column())
             name = name_item.text() if name_item is not None else ""
-            self._tableWidget.removeRow(row)
-            if name and not self._hasSignalRow(name):
-                self._valueItems.pop(name, None)
-                self.releaseSignal(name)
+            self._table_widget.removeRow(row)
+            if name and not self._has_signal_row(name):
+                self._value_items.pop(name, None)
+                self.release_signal(name)
+        self._rebuild_value_items()
 
-        self._rebuildValueItems()
-
-    def _hasSignalRow(self, name):
+    def _has_signal_row(self, name):
         return any(
-            self._tableWidget.item(row, self._signalNameColumn()) is not None
-            and self._tableWidget.item(row, self._signalNameColumn()).text() == name
-            for row in range(self._tableWidget.rowCount())
+            self._table_widget.item(row, self._signal_name_column()) is not None
+            and self._table_widget.item(row, self._signal_name_column()).text() == name
+            for row in range(self._table_widget.rowCount())
         )
 
-    def _rebuildValueItems(self):
-        self._valueItems = {
-            self._tableWidget.item(row, self._signalNameColumn()).text(): self._tableWidget.item(row, self._signalValueColumn())
-            for row in range(self._tableWidget.rowCount())
-            if self._tableWidget.item(row, self._signalNameColumn()) is not None
-            and self._tableWidget.item(row, self._signalValueColumn()) is not None
+    def _rebuild_value_items(self):
+        self._value_items = {
+            self._table_widget.item(row, self._signal_name_column()).text(): self._table_widget.item(
+                row, self._signal_value_column()
+            )
+            for row in range(self._table_widget.rowCount())
+            if self._table_widget.item(row, self._signal_name_column()) is not None
+            and self._table_widget.item(row, self._signal_value_column()) is not None
         }
 
-    def _signalValueColumn(self):
-        return 1
-
-    def autoSetColumnWidth(self, column=None):
-        columns = range(self._tableWidget.columnCount())
+    def auto_set_column_width(self, column=None):
+        columns = range(self._table_widget.columnCount())
         if column is not None:
-            columns = [self._tableWidget.horizontalHeaderItem(i).text() for i in columns]
-            column = columns.index(column)
-            columns = [column]
-
+            headers = [self._table_widget.horizontalHeaderItem(i).text() for i in columns]
+            columns = [headers.index(column)]
         for index in columns:
-            self._tableWidget.resizeColumnToContents(index)
-    ##########################################
-    # State
+            self._table_widget.resizeColumnToContents(index)
+
     def closeEvent(self, event):
-        for name in tuple(self._ownedSignals):
-            self._dataManager.releaseSignal(name, self)
-        self._ownedSignals.clear()
-        self.closed.emit(self)   # notify parent
+        for name in tuple(self._owned_signals):
+            self._data_manager.release_signal(name, self)
+        self._owned_signals.clear()
+        self.closed.emit(self)
         super().closeEvent(event)
 
-    def acquireSignal(self, name: str) -> None:
-        self._dataManager.acquireSignal(name, self)
-        self._ownedSignals.add(name)
+    def acquire_signal(self, name: str) -> None:
+        self._data_manager.acquire_signal(name, self)
+        self._owned_signals.add(name)
 
-    def releaseSignal(self, name: str) -> None:
-        self._dataManager.releaseSignal(name, self)
-        self._ownedSignals.discard(name)
+    def release_signal(self, name: str) -> None:
+        self._data_manager.release_signal(name, self)
+        self._owned_signals.discard(name)
 
-    def exportState(self):
-        """Return the common persisted state for every MDI widget."""
+    def export_state(self):
         return {
             "window_title": self.windowTitle(),
             "geometry": {
@@ -212,27 +181,22 @@ class WidgetBase(QMdiSubWindow):
             "minimized": self.isMinimized(),
         }
 
-    def importState(self, state):
-        """Restore common state; subclasses may extend this method."""
+    def import_state(self, state):
         if not isinstance(state, Mapping):
             return
-
         title = state.get("window_title")
         if isinstance(title, str):
             self.setWindowTitle(title)
-
         geometry = state.get("geometry")
         if isinstance(geometry, Mapping):
             width = geometry.get("width")
             height = geometry.get("height")
             x = geometry.get("x")
             y = geometry.get("y")
-
             if isinstance(width, int) and isinstance(height, int):
                 self.resize(max(1, width), max(1, height))
             if isinstance(x, int) and isinstance(y, int):
                 self.move(x, y)
-
         if state.get("maximized") is True:
             self.showMaximized()
         elif state.get("minimized") is True:
@@ -240,20 +204,18 @@ class WidgetBase(QMdiSubWindow):
         elif state.get("visible") is True:
             self.showNormal()
 
-
-    def startAcquisition(self):
-        pass
-        #self._refresh_timer.start()
-
-    def stopAcquisition(self):
-        pass
-    
-    def resetAcquisition(self):
+    def start_acquisition(self):
         pass
 
-    def refreshData(self):
-        updates = self._dataManager.getSignalData()
-        for name, sv in updates.items():
-            item = self._valueItems.get(name)
+    def stop_acquisition(self):
+        pass
+
+    def reset_acquisition(self):
+        pass
+
+    def refresh_data(self):
+        updates = self._data_manager.get_signal_data()
+        for name, scalar_value in updates.items():
+            item = self._value_items.get(name)
             if item is not None:
-                item.setText(f"{sv.value:.3f}")
+                item.setText(f"{scalar_value.value:.3f}")

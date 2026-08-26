@@ -50,29 +50,29 @@ class MainWindow(QMainWindow):
         self.resize(1100, 600)
 
         # --- MDI AREA ---
-        self.mdiArea = QMdiArea()
-        self.setCentralWidget(self.mdiArea)
+        self.mdi_area = QMdiArea()
+        self.setCentralWidget(self.mdi_area)
 
         # --- XCP WORKER AND DATA MANAGER ---
-        self._dataManager = DataManager.DataManager()
+        self._data_manager = DataManager.DataManager()
         self.worker = XcpWorker.XcpWorker()
-        self.worker.signal_ready.connect(self._dataManager.ingestSignal)
+        self.worker.signal_ready.connect(self._data_manager.ingest_signal)
 
         # --- MENUS ---
-        self.createMenu()
+        self.create_menu()
 
-        self.loadProject()
+        self.load_project()
         
         # Set up timer
         self.refresh_timer = QTimer(self)
-        self.refresh_timer.timeout.connect(self.refreshAllWidgets)
+        self.refresh_timer.timeout.connect(self.refresh_all_widgets)
         self.refresh_timer.start(100)  # refresh every 100 ms
 
 
     # --------------------------------------------------
     # MENUS
     # --------------------------------------------------
-    def createMenu(self):
+    def create_menu(self):
         menu_bar = self.menuBar()
 
         # File Menu
@@ -80,12 +80,12 @@ class MainWindow(QMainWindow):
 
         new_scope_action = QWidgetAction(self)
         new_scope_action.setText("New Scope")
-        new_scope_action.triggered.connect(self.createNewScope)
+        new_scope_action.triggered.connect(self.create_new_scope)
 
         
         table_action = QWidgetAction(self)
         table_action.setText("New Scalar Table")
-        table_action.triggered.connect(self.createNewScalarTable)
+        table_action.triggered.connect(self.create_new_scalar_table)
     
         #file_menu.addSeparator()
         #file_menu.addAction(table_action)
@@ -93,12 +93,12 @@ class MainWindow(QMainWindow):
         
         measure_action = QWidgetAction(self)
         measure_action.setText("New Measure Table")
-        measure_action.triggered.connect(self.createNewMeasureTable)
+        measure_action.triggered.connect(self.create_new_measure_table)
 
 
         close_action = QWidgetAction(self)
         close_action.setText("Close")
-        close_action.triggered.connect(self.closeActiveWindow)
+        close_action.triggered.connect(self.close_active_window)
 
         exit_action = QWidgetAction(self)
         exit_action.setText("Exit")
@@ -116,35 +116,35 @@ class MainWindow(QMainWindow):
 
         start_action = QWidgetAction(self)
         start_action.setText("Start")
-        start_action.triggered.connect(self.startAcquisition)
+        start_action.triggered.connect(self.start_acquisition)
 
         stop_action = QWidgetAction(self)
         stop_action.setText("Stop")
-        stop_action.triggered.connect(self.stopAcquisition)
+        stop_action.triggered.connect(self.stop_acquisition)
 
         options_menu.addActions([
             start_action,
             stop_action
         ])
 
-    def saveLayout(self):
+    def save_layout(self):
         return {
             "geometry": self.saveGeometry().data(),
             "state": self.saveState().data()
         }
 
-    def loadLayout(self, data):
+    def load_layout(self, data):
         if data is not None:
             self.restoreGeometry(data["geometry"])
             self.restoreState(data["state"])
 
-    def saveProject(self, filename=RECENT_PROJECT_FILE):
+    def save_project(self, filename=RECENT_PROJECT_FILE):
         print("Saving project..")
         data = {
-            "layout": self.saveLayout(),
+            "layout": self.save_layout(),
             "widgets": [],
         }
-        for widget in self.mdiArea.subWindowList():
+        for widget in self.mdi_area.subWindowList():
             widget_type = next(
                 (name for cls, name in WIDGET_TYPES.items()
                  if isinstance(widget, cls)),
@@ -155,7 +155,7 @@ class MainWindow(QMainWindow):
 
             data["widgets"].append({
                 "type": widget_type,
-                "state": widget.exportState(),
+                "state": widget.export_state(),
             })
 
         # Keep the old field for consumers that still understand the legacy
@@ -169,7 +169,7 @@ class MainWindow(QMainWindow):
         with open(filename, "wb") as f:
             pickle.dump(data, f)
     
-    def loadProject(self, filename=RECENT_PROJECT_FILE):
+    def load_project(self, filename=RECENT_PROJECT_FILE):
         print(f"load project {filename}")
         try:
             with open(filename, "rb") as f:
@@ -177,10 +177,10 @@ class MainWindow(QMainWindow):
 
                 # Loading replaces the current workspace instead of appending
                 # another copy of every persisted subwindow.
-                for widget in list(self.mdiArea.subWindowList()):
+                for widget in list(self.mdi_area.subWindowList()):
                     widget.close()
 
-                self.loadLayout(data.get("layout", None))
+                self.load_layout(data.get("layout", None))
 
                 records = data.get("widgets")
                 if records is None:
@@ -195,9 +195,9 @@ class MainWindow(QMainWindow):
                         })
 
                 factories = {
-                    "oscilloscope": self.createNewScope,
-                    "measure_table": self.createNewMeasureTable,
-                    "scalar_table": self.createNewScalarTable,
+                    "oscilloscope": self.create_new_scope,
+                    "measure_table": self.create_new_measure_table,
+                    "scalar_table": self.create_new_scalar_table,
                 }
                 for record in records:
                     if not isinstance(record, dict):
@@ -206,39 +206,39 @@ class MainWindow(QMainWindow):
                     if factory is None:
                         continue
                     widget = factory()
-                    widget.importState(record.get("state", {}))
+                    widget.import_state(record.get("state", {}))
 
         except Exception:
             pass
 
-    def createNewScope(self):
-        w = OscilloscopeWidgetV2.OscilloscopeWidgetV2(self._dataManager)
-        self.mdiArea.addSubWindow(w)
+    def create_new_scope(self):
+        w = OscilloscopeWidgetV2.OscilloscopeWidgetV2(self._data_manager)
+        self.mdi_area.addSubWindow(w)
         self.worker.signal_ready.connect(w.on_xcp_data)
         w.show()
         return w
     
-    def createNewScalarTable(self):
-        table = ScalarTableWidget.ScalarTableWidget(self._dataManager)
-        self.mdiArea.addSubWindow(table)
+    def create_new_scalar_table(self):
+        table = ScalarTableWidget.ScalarTableWidget(self._data_manager)
+        self.mdi_area.addSubWindow(table)
         table.show()
         return table
 
-    def createNewMeasureTable(self) -> MeasureTableWidget:
-        w = MeasureTableWidget.MeasureTableWidget(self._dataManager)
-        self.mdiArea.addSubWindow(w)
+    def create_new_measure_table(self) -> MeasureTableWidget:
+        w = MeasureTableWidget.MeasureTableWidget(self._data_manager)
+        self.mdi_area.addSubWindow(w)
         w.show()
         return w
     
-    def closeActiveWindow(self):
-        sub = self.mdiArea.activeSubWindow()
+    def close_active_window(self):
+        sub = self.mdi_area.activeSubWindow()
         if sub:
             sub.close()
 
-    def startAcquisition(self):
+    def start_acquisition(self):
         if not self.worker.isRunning():
             self.worker.start()
-            for widget in self.mdiArea.subWindowList():
+            for widget in self.mdi_area.subWindowList():
                 widget_type = next(
                     (name for cls, name in WIDGET_TYPES.items()
                     if isinstance(widget, cls)),
@@ -246,12 +246,12 @@ class MainWindow(QMainWindow):
                 )
                 if widget_type is None:
                     continue
-                widget.startAcquisition()
+                widget.start_acquisition()
 
-    def stopAcquisition(self):
+    def stop_acquisition(self):
         if self.worker.isRunning():
             self.worker.stop()
-            for widget in self.mdiArea.subWindowList():
+            for widget in self.mdi_area.subWindowList():
                 widget_type = next(
                     (name for cls, name in WIDGET_TYPES.items()
                     if isinstance(widget, cls)),
@@ -259,10 +259,10 @@ class MainWindow(QMainWindow):
                 )
                 if widget_type is None:
                     continue
-                widget.stopAcquisition()
+                widget.stop_acquisition()
     
-    def refreshAllWidgets(self):
-        for widget in self.mdiArea.subWindowList():
+    def refresh_all_widgets(self):
+        for widget in self.mdi_area.subWindowList():
             widget_type = next(
                     (name for cls, name in WIDGET_TYPES.items()
                     if isinstance(widget, cls)),
@@ -273,7 +273,7 @@ class MainWindow(QMainWindow):
             if not widget.isVisible() or widget.isMinimized():
                 continue
             try:
-                widget.refreshData()
+                widget.refresh_data()
             except Exception as e:
                 print(f"Refresh error: {e}")
 
@@ -284,7 +284,7 @@ class MainWindow(QMainWindow):
         if self.worker:
             self.worker.stop()
         event.accept()
-        self.saveProject()
+        self.save_project()
 
 # ==========================================================
 # 4. APPLICATION ENTRY POINT
