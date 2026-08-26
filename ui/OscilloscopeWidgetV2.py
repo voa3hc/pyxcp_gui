@@ -378,24 +378,16 @@ class OscilloscopeWidgetV2(WidgetBase):
 
     def __init__(self, data_manager, parent=None):
         super().__init__(data_manager, parent)
-
-        # central widget
-        self._central = QWidget()
-        self.setWidget(self._central)
-        self.main_layout = QVBoxLayout(self._central)
         self.plot = MultiSignalPlot()
         self._setup_toolbar()
 
         # ==================================================
         # CENTRAL AREA (PLOT + TABLE)
         # ==================================================
-        self.center_layout = QHBoxLayout()
+        self._centerLayout = QHBoxLayout()
         self._setup_ui()
         self.plot.set_x_window(0.0, self.WINDOW_SECONDS)
-        self.main_layout.addLayout(self.center_layout)
-
-        #self.setWindowTitle("Shared Scope - Performance Optimized")
-        #self.resize(1280, 720)
+        self._mainWidgetLayout.addLayout(self._centerLayout)
 
         self.current_time = 0.0
         self.isScopeRunning = False
@@ -409,28 +401,29 @@ class OscilloscopeWidgetV2(WidgetBase):
     # UI
     # --------------------------------------------------------
     def _setup_ui(self):
-        #central = QWidget()
-        #self.setCentralWidget(self._central)
-
+ 
         splitter = QSplitter(Qt.Orientation.Horizontal)
-
-        self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["Vis", "Name", "Value"])
-        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        self.table.itemChanged.connect(self._on_table_item_changed)
-        self.table.selectionModel().selectionChanged.connect(self._on_selection_changed)
+        self._mainWidgetLayout.removeWidget(self._tableWidget)
+        # Insert a new column at the beginning
+        self._tableWidget.insertColumn(0)
+        # Set header
+        self._tableWidget.setHorizontalHeaderItem(0, QTableWidgetItem("Vis") )
+        self._tableWidget.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._tableWidget.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._tableWidget.itemChanged.connect(self._on_table_item_changed)
+        self._tableWidget.selectionModel().selectionChanged.connect(self._on_selection_changed)
 
         splitter.addWidget(self.plot)
-        splitter.addWidget(self.table)
+        splitter.addWidget(self._tableWidget)
         splitter.setSizes([980, 300])
 
-        self.center_layout.addWidget(splitter)
+        self._centerLayout.addWidget(splitter)
+        self.setWindowTitle("Oscilloscope")
 
     def _setup_toolbar(self):
         tb = QToolBar("Scope Toolbar")
         #self.addToolBar(tb)
-        self.main_layout.addWidget(tb)
+        self._mainWidgetLayout.addWidget(tb)
 
         act_run = tb.addAction("Run")
         act_pause = tb.addAction("Pause")
@@ -453,7 +446,6 @@ class OscilloscopeWidgetV2(WidgetBase):
         act_pan_down.triggered.connect(lambda: self.plot.pan_selected_y(+0.08))
         act_fit.triggered.connect(self.plot.auto_fit_selected_y)
 
-
     # --------------------------------------------------------
     # Signal setup
     # --------------------------------------------------------
@@ -470,23 +462,23 @@ class OscilloscopeWidgetV2(WidgetBase):
             }
         ]
 
-        self.table.blockSignals(True)
+        self._tableWidget.blockSignals(True)
 
         for sig in self.signal_defs:
             self.acquire_signal(sig["name"])
             self.plot.add_signal(sig["name"], sig["color"], max_points=self.MAX_POINTS)
             self._add_signal_row(sig["name"], 0.0)
 
-        self.table.blockSignals(False)
+        self._tableWidget.blockSignals(False)
 
-        if self.table.rowCount() > 0:
-            self.table.selectRow(0)
-            first_name = self.table.item(0, 1).text()
+        if self._tableWidget.rowCount() > 0:
+            self._tableWidget.selectRow(0)
+            first_name = self._tableWidget.item(0, 1).text()
             self.plot.select_signal(first_name)
 
     def _add_signal_row(self, name: str, value: float):
-        row = self.table.rowCount()
-        self.table.insertRow(row)
+        row = self._tableWidget.rowCount()
+        self._tableWidget.insertRow(row)
 
         vis_item = QTableWidgetItem("")
         vis_item.setCheckState(Qt.CheckState.Checked)
@@ -499,9 +491,9 @@ class OscilloscopeWidgetV2(WidgetBase):
         name_item = QTableWidgetItem(name)
         value_item = QTableWidgetItem(f"{value:.3f}")
 
-        self.table.setItem(row, 0, vis_item)
-        self.table.setItem(row, 1, name_item)
-        self.table.setItem(row, 2, value_item)
+        self._tableWidget.setItem(row, 0, vis_item)
+        self._tableWidget.setItem(row, 1, name_item)
+        self._tableWidget.setItem(row, 2, value_item)
 
         self.signal_row_map[name] = row
 
@@ -525,7 +517,7 @@ class OscilloscopeWidgetV2(WidgetBase):
 
         row = self.signal_row_map.get(name)
         if row is not None:
-            item = self.table.item(row, 2)
+            item = self._tableWidget.item(row, 2)
             if item is not None:
                 item.setText(f"{float(value):.3f}")
 
@@ -568,8 +560,8 @@ class OscilloscopeWidgetV2(WidgetBase):
 
         self.plot.clear_all_data()
 
-        for row in range(self.table.rowCount()):
-            value_item = self.table.item(row, 2)
+        for row in range(self._tableWidget.rowCount()):
+            value_item = self._tableWidget.item(row, 2)
             if value_item is not None:
                 value_item.setText("0.000")
 
@@ -584,7 +576,7 @@ class OscilloscopeWidgetV2(WidgetBase):
             return
 
         row = item.row()
-        name_item = self.table.item(row, 1)
+        name_item = self._tableWidget.item(row, 1)
         if name_item is None:
             return
 
@@ -593,11 +585,11 @@ class OscilloscopeWidgetV2(WidgetBase):
         self.plot.set_signal_visible(name, visible)
 
     def _on_selection_changed(self):
-        row = self.table.currentRow()
+        row = self._tableWidget.currentRow()
         if row < 0:
             return
 
-        name_item = self.table.item(row, 1)
+        name_item = self._tableWidget.item(row, 1)
         if name_item is None:
             return
 

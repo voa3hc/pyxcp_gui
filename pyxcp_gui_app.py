@@ -49,9 +49,9 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.mdiArea)
 
         # --- XCP WORKER AND DATA MANAGER ---
-        self.data_manager = DataManager.DataManager()
+        self._dataManager = DataManager.DataManager()
         self.worker = XcpWorker.XcpWorker()
-        self.worker.signal_ready.connect(self.data_manager.ingest_signal)
+        self.worker.signal_ready.connect(self._dataManager.ingest_signal)
 
         # --- MENUS ---
         self._create_menus()
@@ -229,7 +229,7 @@ class MainWindow(QMainWindow):
             self.mOslScopeWidgets.remove(widget)
 
     def new_scope(self):
-        w = OscilloscopeWidgetV2.OscilloscopeWidgetV2(self.data_manager)
+        w = OscilloscopeWidgetV2.OscilloscopeWidgetV2(self._dataManager)
         self.mdiArea.addSubWindow(w)
         self.worker.signal_ready.connect(w.on_xcp_data)
         self.mOslScopeWidgets.append(w)
@@ -242,7 +242,7 @@ class MainWindow(QMainWindow):
     ###########################
 
     def new_scalar_table(self):
-        table = ScalarTableWidget.ScalarTableWidget(self.data_manager)
+        table = ScalarTableWidget.ScalarTableWidget(self._dataManager)
         self.mdiArea.addSubWindow(table)
         self.mScalarTableWidgets.append(table)
         table.closed.connect(self.on_scalar_closed)
@@ -261,7 +261,7 @@ class MainWindow(QMainWindow):
             self.mMeasureTableWidgets.remove(widget)
 
     def new_measure_table(self) -> MeasureTableWidget:
-        w = MeasureTableWidget.MeasureTableWidget(self.data_manager)
+        w = MeasureTableWidget.MeasureTableWidget(self._dataManager)
         self.mdiArea.addSubWindow(w)
         # Connect worker to this scope
         # TODO Cleanup this self.worker.data_received.connect(w.update_value)
