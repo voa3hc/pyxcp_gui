@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import Lock
-from typing import Dict, List, Tuple, Set
+from typing import Dict, Set, Tuple
 
 import numpy as np
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -28,21 +28,45 @@ class DataManager(QObject):
         self._lock = Lock()
         # all signal dict, name : time - value
         self._signals: Dict[str, ScalarValue] = {}
+        self._signal_references: Dict[str, Set[int]] = {}
 
     # -----------------------------
     # Signal registration
     # -----------------------------
     def add_signal(self, name: str) -> None:
         with self._lock:
-            if name in self._signals.keys():
+            self._ensure_signal(name)
+
+    def acquire_signal(self, name: str, owner) -> None:
+        """Register a signal and retain one reference for ``owner``."""
+        with self._lock:
+            self._ensure_signal(name)
+            self._signal_references.setdefault(name, set()).add(id(owner))
+
+    def release_signal(self, name: str, owner) -> None:
+        """Release one owner's reference and remove unreferenced signals."""
+        with self._lock:
+            owners = self._signal_references.get(name)
+            if owners is None:
                 return
+
+            owners.discard(id(owner))
+            if owners:
+                return
+
+            self._signal_references.pop(name, None)
+            self._signals.pop(name, None)
+
+    def _ensure_signal(self, name: str) -> None:
+        if name not in self._signals:
             self._signals[name] = ScalarValue(0, 0)
 
     def remove_signal(self, name: str) -> None:
         with self._lock:
-            if name not in self._signals.keys():
+            if self._signal_references.get(name):
                 return
-            self._signals.remove(name)
+            self._signal_references.pop(name, None)
+            self._signals.pop(name, None)
 
     # -----------------------------
     # Worker ingestion

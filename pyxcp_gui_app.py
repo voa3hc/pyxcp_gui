@@ -60,11 +60,8 @@ class MainWindow(QMainWindow):
         self.mOslScopeWidgets = []
         self.mMeasureTableWidgets = []
         self.mScalarTableWidgets = []
-        #self.new_scope()
-        #self.new_measure_table()
-        #self.new_scalar_table()
+ 
         self.load_project()
-
         
         # Set up timer
         self.refresh_timer = QTimer(self)
@@ -142,64 +139,119 @@ class MainWindow(QMainWindow):
             self.restoreState(data["state"])
 
     def save_project(self, filename=RECENT_PROJECT_FILE):
+        print("Saving project..")
         data = {
             "layout": self.save_layout(),
-            "measure_tables": [],
-            #"scalar_table": self.scalar_widget.export_state(),
-            #"osc": self.osc_widget.export_state()
+            "widgets": [],
         }
 
-        for w in list(getattr(self, "mMeasureTableWidgets", [])):
-            if w is None:
+        widget_types = {
+            OscilloscopeWidgetV2.OscilloscopeWidgetV2: "oscilloscope",
+            MeasureTableWidget.MeasureTableWidget: "measure_table",
+            ScalarTableWidget.ScalarTableWidget: "scalar_table",
+        }
+
+        for widget in self.mdiArea.subWindowList():
+            widget_type = next(
+                (name for cls, name in widget_types.items()
+                 if isinstance(widget, cls)),
+                None,
+            )
+            if widget_type is None:
                 continue
-            data["measure_tables"].append({
-                "title": w.windowTitle(),
-                "data": w.export_state()
+
+            data["widgets"].append({
+                "type": widget_type,
+                "state": widget.export_state(),
             })
+
+        # Keep the old field for consumers that still understand the legacy
+        # measurement-table-only project format.
+        data["measure_tables"] = [
+            record for record in data["widgets"]
+            if record["type"] == "measure_table"
+        ]
 
         # save to bin file
         with open(filename, "wb") as f:
             pickle.dump(data, f)
     
     def load_project(self, filename=RECENT_PROJECT_FILE):
+        print(f"load project {filename}")
         try:
             with open(filename, "rb") as f:
                 data = pickle.load(f)
+
+                # Loading replaces the current workspace instead of appending
+                # another copy of every persisted subwindow.
+                for widget in list(self.mdiArea.subWindowList()):
+                    widget.close()
+                self.mOslScopeWidgets.clear()
+                self.mMeasureTableWidgets.clear()
+                self.mScalarTableWidgets.clear()
+
                 self.load_layout(data.get("layout", None))
 
-                for table_state in data.get("measure_tables", []):
-                    # If gui_app.py keeps: from ui import MeasureTableWidget
-                    w = self.new_measure_table()
-                    # Restore table data
-                    w.setWindowTitle(table_state.get("title", "Measurement Table"))
-                    w.import_state(table_state.get("data", []))
+                records = data.get("widgets")
+                if records is None:
+                    records = []
+                    for legacy in data.get("measure_tables", []):
+                        state = dict(legacy.get("data", {}))
+                        if "title" in legacy:
+                            state.setdefault("window_title", legacy["title"])
+                        records.append({
+                            "type": "measure_table",
+                            "state": state,
+                        })
+
+                factories = {
+                    "oscilloscope": self.new_scope,
+                    "measure_table": self.new_measure_table,
+                    "scalar_table": self.new_scalar_table,
+                }
+                for record in records:
+                    if not isinstance(record, dict):
+                        continue
+                    factory = factories.get(record.get("type"))
+                    if factory is None:
+                        continue
+                    widget = factory()
+                    widget.import_state(record.get("state", {}))
 
         except Exception:
             pass
-        #self.measure_widget.import_state(data["measure_table"])
-        #self.scalar_widget.import_state(data["scalar_table"])
-        #self.osc_widget.import_state(data["osc"])
         
     ###########################
     # OscilloscopeWidget widget
     ###########################
     def on_scope_closed(self, widget):
-        if widget in self.mMeasureTableWidgets:
-            self.mMeasureTableWidgets.remove(widget)
+        if widget in self.mOslScopeWidgets:
+            self.mOslScopeWidgets.remove(widget)
 
     def new_scope(self):
         w = OscilloscopeWidgetV2.OscilloscopeWidgetV2(self.data_manager)
         self.mdiArea.addSubWindow(w)
-        #self.worker.data_received.connect(w.update_value) #TODO
+        self.worker.signal_ready.connect(w.on_xcp_data)
         self.mOslScopeWidgets.append(w)
-        w.closed.connect(self.on_measure_closed)
+        w.closed.connect(self.on_scope_closed)
         w.show()
         return w
 
+    ###########################
+    # ScalarTableWidget widget
+    ###########################
+
     def new_scalar_table(self):
-        table = ScalarTableWidget.ScalarTableWidget()
+        table = ScalarTableWidget.ScalarTableWidget(self.data_manager)
         self.mdiArea.addSubWindow(table)
+        self.mScalarTableWidgets.append(table)
+        table.closed.connect(self.on_scalar_closed)
         table.show()
+        return table
+
+    def on_scalar_closed(self, widget):
+        if widget in self.mScalarTableWidgets:
+            self.mScalarTableWidgets.remove(widget)
 
     ###########################
     # MeasureTableWidget widget

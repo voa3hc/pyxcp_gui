@@ -1,12 +1,12 @@
-import sys
-import math
 from dataclasses import dataclass
+from typing import Dict, Optional
+
 import numpy as np
 import pyqtgraph as pg
 
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
+    QApplication, QWidget, QHBoxLayout, QVBoxLayout,
     QSplitter, QTableWidget, QTableWidgetItem,
     QAbstractItemView, QToolBar
 )
@@ -130,7 +130,6 @@ class MultiSignalPlot(pg.PlotWidget):
 
         self.signals: Dict[str, SignalState] = {}
         self.selected_name: Optional[str] = None
-        self._prev_selected_name: Optional[str] = None
 
     # --------------------------------------------------------
     # Safe base ViewBox access
@@ -179,10 +178,7 @@ class MultiSignalPlot(pg.PlotWidget):
         curve = pg.PlotDataItem([], [], pen=pg.mkPen(color=color, width=2))
         # Performance helpers
         curve.setClipToView(True)
-        try:
-            curve.setDownsampling(auto=True, method='peak')
-        except Exception:
-            pass
+        curve.setDownsampling(auto=True, method='peak')
 
         vb.addItem(curve)
 
@@ -377,7 +373,8 @@ class OscilloscopeWidgetV2(WidgetBase):
     RENDER_INTERVAL_MS = 33         # redraw rate (~30 FPS)
     TABLE_INTERVAL_MS = 100         # table refresh rate (10 FPS)
     WINDOW_SECONDS = 10.0
-    MAX_POINTS = 999999
+    # Bound memory while retaining the full visible ten-second window at 50 Hz.
+    MAX_POINTS = 5000
 
     def __init__(self, data_manager, parent=None):
         super().__init__(data_manager, parent)
@@ -408,11 +405,6 @@ class OscilloscopeWidgetV2(WidgetBase):
         
         self._setup_sample_signals()
         
-        self._states = {}  # name -> SignalState
-
-        # subscribe to data
-        self.data_manager.data_arrived.connect( self._on_data_arrived)
-
     # --------------------------------------------------------
     # UI
     # --------------------------------------------------------
@@ -462,15 +454,6 @@ class OscilloscopeWidgetV2(WidgetBase):
         act_fit.triggered.connect(self.plot.auto_fit_selected_y)
 
 
-    def _refresh_table(self):
-        updates = self.data_manager.consume_plot_updates()
-        for name, (x, y) in updates.items():
-            state = self._states.get(name)
-            if state is None:
-                continue
-            state.curve.setData(x, y)
-
-
     # --------------------------------------------------------
     # Signal setup
     # --------------------------------------------------------
@@ -490,6 +473,7 @@ class OscilloscopeWidgetV2(WidgetBase):
         self.table.blockSignals(True)
 
         for sig in self.signal_defs:
+            self.acquire_signal(sig["name"])
             self.plot.add_signal(sig["name"], sig["color"], max_points=self.MAX_POINTS)
             self._add_signal_row(sig["name"], 0.0)
 
@@ -524,25 +508,32 @@ class OscilloscopeWidgetV2(WidgetBase):
     # --------------------------------------------------------
     # Real-time pipeline
     # --------------------------------------------------------
-    def _on_data_arrived(self):
-        self.ingest_samples()
-        
-    def refresh_widgets(self):
-        self.refresh_table_values()
-        self.render_scope()
-
-    def ingest_samples(self):
+    @pyqtSlot(tuple)
+    def on_xcp_data(self, sample):
+        """Receive one worker sample on the GUI thread."""
         if not self.isScopeRunning:
             return
-        
-        updates = self.data_manager.get_signal_data()
-        for name, sv in updates.items():
-            state = self.plot.signals.get(name)
-            if state is None:
-                continue
-            # sv.timestamp
-            self.current_time = sv.timestamp
-            self.plot.append_sample(name, self.current_time, sv.value)
+
+        timestamp, name, value = sample
+        state = self.plot.signals.get(name)
+        if state is None:
+            return
+
+        timestamp = float(timestamp)
+        self.current_time = max(self.current_time, timestamp)
+        self.plot.append_sample(name, timestamp, float(value))
+
+        row = self.signal_row_map.get(name)
+        if row is not None:
+            item = self.table.item(row, 2)
+            if item is not None:
+                item.setText(f"{float(value):.3f}")
+
+    def refresh_widgets(self):
+        if not self.isScopeRunning:
+            return
+
+        self.render_scope()
 
 
     def render_scope(self):
@@ -554,27 +545,6 @@ class OscilloscopeWidgetV2(WidgetBase):
         xmin = max(0.0, self.current_time - self.WINDOW_SECONDS)
         xmax = max(self.WINDOW_SECONDS, self.current_time)
         self.plot.set_x_window(xmin, xmax)
-
-    def refresh_table_values(self):
-        if not self.isScopeRunning:
-            return
-
-        updates = self.data_manager.get_signal_data()
-
-        for name, sv in updates.items():
-            state = self.plot.signals.get(name)
-            if state is None:
-                continue
-
-            row = self.signal_row_map.get(name)
-            if row is None:
-                continue
-
-            item = self.table.item(row, 2)
-            if item is not None:
-                item.setText(f"{sv.value:.3f}")
-
-   
 
     # --------------------------------------------------------
     # Controls
