@@ -65,39 +65,41 @@ class XcpWorker(QThread):
         super().__init__(parent)
         self._running = False
     
-    def on_sample(self, timestamp: float, name: str, value: float):
-        self.signal_ready.emit((timestamp, name, value))
+    def onSample(self, timestamp: float, name: str, value: float):
+        if self._running:
+            self.signal_ready.emit((timestamp, name, value))
 
     def run(self):
-        self._running = True
-        
-        policy = UpdateDataToDataManager(DAQ_LISTS, self.on_sample)
-        
-        ap = ArgumentParser()
-        # Establish session framework and stream data continuously
-        with ap.run(policy=policy) as xcp_master:
-            xcp_master.connect()
-            xcp_master.cond_unlock("DAQ") # Release DAQ resources if locked
+        if not self._running:
+            self._running = True
             
-            print("Configuring DAQ lists and subscribing to ECU task threads...")
-            policy.setup()
+            policy = UpdateDataToDataManager(DAQ_LISTS, self.onSample)
             
-            print("Beginning continuous data transmission...")
-            policy.start()
-            
-            while self._running:
-                time.sleep(1)
-            
-            print("Stopping continuous stream safely...")
-            policy.stop()
-            try:
-                xcp_master.close()
-            except Exception:
-                    pass
-        # End with
+            ap = ArgumentParser()
+            # Establish session framework and stream data continuously
+            with ap.run(policy=policy) as xcp_master:
+                xcp_master.connect()
+                xcp_master.cond_unlock("DAQ") # Release DAQ resources if locked
+                
+                print("Configuring DAQ lists and subscribing to ECU task threads...")
+                policy.setup()
+                
+                print("Beginning continuous data transmission...")
+                policy.start()
+                
+                while self._running:
+                    time.sleep(1)
+                
+                print("Stopping policy")
+                policy.stop()
+                try:
+                    xcp_master.close()
+                except Exception:
+                        pass
+            # End with
     
     def stop(self):
-        print("Stopping continuous stream safely...")
-        self._running = False
-        self.wait()
-
+        if self._running:
+            print("Stopping continuous stream safely")
+            self._running = False
+            self.wait()

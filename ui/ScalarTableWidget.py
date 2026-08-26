@@ -28,10 +28,10 @@ class ScalarTableWidget(MeasureTableWidget):
         # optional
         self.setWindowTitle("Scalar Table")
         # populate
-        self._populate_example_data()
+        self._populateExampleData()
 
     # --------------------------------------------------
-    def _populate_example_data(self):
+    def _populateExampleData(self):
         signals = [
             ("InjHyd_swtRefEveEOE_C", "0.00", "[-]"),
             ("InjHyd_swtEnaRef_C", "9.00", "[-]"),
@@ -41,6 +41,6 @@ class ScalarTableWidget(MeasureTableWidget):
         ]
 
         for name, value, unit in signals:
-            self._add_row(name, value, unit)
+            self._addRow(name, value, unit)
 
     

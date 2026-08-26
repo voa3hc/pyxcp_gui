@@ -30,10 +30,10 @@ class MeasureTableWidget(WidgetBase):
         ]
 
         for name, value, unit in signals:
-            self._add_row(name, value, unit)
+            self._addRow(name, value, unit)
 
     # --------------------------------------------------
-    def export_state(self):
+    def exportState(self):
         data = []
         for row in range(self._tableWidget.rowCount()):
             name = self._tableWidget.item(row, 0).text()
@@ -46,7 +46,7 @@ class MeasureTableWidget(WidgetBase):
             for col in range(self._tableWidget.columnCount())
         ]
 
-        state = super().export_state()
+        state = super().exportState()
         state.update({
             "data": data,
             "column_widths": column_widths,
@@ -54,17 +54,17 @@ class MeasureTableWidget(WidgetBase):
         return state
 
 
-    def import_state(self, state):
+    def importState(self, state):
         if not isinstance(state, dict):
             return
 
-        super().import_state(state)
+        super().importState(state)
         for name in tuple(self._ownedSignals):
-            self.release_signal(name)
+            self.releaseSignal(name)
         self._tableWidget.setRowCount(0)
         self._valueItems.clear()
         for name, value, unit in state.get("data", []):
-            self._add_row(name, value, unit)
+            self._addRow(name, value, unit)
 
         # restore column widths
         widths = state.get("column_widths", [])
