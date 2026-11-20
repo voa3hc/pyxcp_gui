@@ -61,6 +61,8 @@ htmlcov/
 .DS_Store
 Thumbs.db
 Desktop.ini
+*.a2ldb
+*.csv
 
 # Logs
 *.log
